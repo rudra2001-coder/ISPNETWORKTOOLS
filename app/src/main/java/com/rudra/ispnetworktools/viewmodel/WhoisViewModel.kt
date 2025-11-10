@@ -8,35 +8,51 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.apache.commons.net.whois.WhoisClient
-import java.io.IOException
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import javax.inject.Inject
+
+sealed class WhoisUiState {
+    object Idle : WhoisUiState()
+    object Loading : WhoisUiState()
+    data class Success(val result: String) : WhoisUiState()
+    data class Error(val message: String) : WhoisUiState()
+}
 
 @HiltViewModel
 class WhoisViewModel @Inject constructor() : ViewModel() {
 
-    private val _whoisResult = MutableStateFlow("")
-    val whoisResult = _whoisResult.asStateFlow()
-
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading = _isLoading.asStateFlow()
+    private val _whoisState = MutableStateFlow<WhoisUiState>(WhoisUiState.Idle)
+    val whoisState = _whoisState.asStateFlow()
 
     fun performWhois(domain: String) {
         viewModelScope.launch {
-            _isLoading.value = true
-            _whoisResult.value = ""
+            _whoisState.value = WhoisUiState.Loading
             withContext(Dispatchers.IO) {
                 try {
-                    val whois = WhoisClient()
-                    whois.connect(WhoisClient.DEFAULT_HOST)
-                    val result = whois.query(domain)
-                    whois.disconnect()
-                    _whoisResult.value = result
-                } catch (e: IOException) {
-                    _whoisResult.value = "Error: ${e.message}"
+                    val process = ProcessBuilder("whois", domain).start()
+                    val reader = BufferedReader(InputStreamReader(process.inputStream))
+                    val output = StringBuilder()
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        output.append(line).append("\n")
+                    }
+                    process.waitFor()
+                    if (output.isNotBlank()) {
+                        _whoisState.value = WhoisUiState.Success(output.toString())
+                    } else {
+                         val errorReader = BufferedReader(InputStreamReader(process.errorStream))
+                         val errorOutput = StringBuilder()
+                         var errorLine: String?
+                        while (errorReader.readLine().also { errorLine = it } != null) {
+                            errorOutput.append(errorLine).append("\n")
+                        }
+                        _whoisState.value = WhoisUiState.Error(errorOutput.toString())
+                    }
+                } catch (e: Exception) {
+                    _whoisState.value = WhoisUiState.Error("Error: ${e.message}")
                 }
             }
-            _isLoading.value = false
         }
     }
 }

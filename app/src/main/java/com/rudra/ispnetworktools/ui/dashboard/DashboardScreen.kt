@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -173,17 +174,27 @@ private fun DashboardContent(
 
                 if (searchQuery.isEmpty()) {
                     QuickStatsSection(
+                        recentToolsCount = uiState.recentTools.size,
+                        favoriteToolsCount = uiState.favoriteTools.size,
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
-                }
 
-                if (uiState.favoriteTools.isNotEmpty() && searchQuery.isEmpty()) {
-                    FavoritesSection(
-                        favoriteTools = uiState.favoriteTools,
-                        onToolClick = onToolClick,
-                        onFavoriteToggle = onFavoriteToggle,
-                        modifier = Modifier.padding(top = 16.dp)
-                    )
+                    if (uiState.recentTools.isNotEmpty()) {
+                        RecentToolsSection(
+                            recentTools = uiState.recentTools,
+                            onToolClick = onToolClick,
+                            modifier = Modifier.padding(top = 16.dp)
+                        )
+                    }
+
+                    if (uiState.favoriteTools.isNotEmpty()) {
+                        FavoritesSection(
+                            favoriteTools = uiState.favoriteTools,
+                            onToolClick = onToolClick,
+                            onFavoriteToggle = onFavoriteToggle,
+                            modifier = Modifier.padding(top = 16.dp)
+                        )
+                    }
                 }
 
                 Column(modifier = Modifier.weight(1f).padding(top = 16.dp)) {
@@ -246,7 +257,11 @@ private fun SearchBar(
 }
 
 @Composable
-private fun QuickStatsSection(modifier: Modifier = Modifier) {
+private fun QuickStatsSection(
+    recentToolsCount: Int,
+    favoriteToolsCount: Int,
+    modifier: Modifier = Modifier
+) {
     Column(modifier = modifier) {
         Text(
             text = "Quick Stats",
@@ -259,8 +274,8 @@ private fun QuickStatsSection(modifier: Modifier = Modifier) {
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            QuickStatItem("Recent Tests", "5", MaterialTheme.colorScheme.primary, Modifier.weight(1f))
-            QuickStatItem("Favorite Tools", "3", MaterialTheme.colorScheme.secondary, Modifier.weight(1f))
+            QuickStatItem("Recent Tools", recentToolsCount.toString(), MaterialTheme.colorScheme.primary, Modifier.weight(1f))
+            QuickStatItem("Favorite Tools", favoriteToolsCount.toString(), MaterialTheme.colorScheme.secondary, Modifier.weight(1f))
             QuickStatItem("Network Status", "Online", MaterialTheme.colorScheme.tertiary, Modifier.weight(1f))
         }
     }
@@ -287,6 +302,69 @@ private fun QuickStatItem(title: String, value: String, color: Color, modifier: 
                 text = title,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecentToolsSection(
+    recentTools: List<ToolItem>,
+    onToolClick: (ToolItem) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        Text(
+            text = "Recent Tools",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(recentTools, key = { it.screen.route }) { tool ->
+                RecentToolChip(
+                    tool = tool,
+                    onClick = { onToolClick(tool) }
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RecentToolChip(
+    tool: ToolItem,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.width(120.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = tool.icon,
+                contentDescription = tool.screen.title,
+                tint = tool.gradientStart,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = tool.screen.title,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -566,102 +644,104 @@ data class ToolItem(
 
 @Composable
 private fun rememberToolItems(): List<ToolItem> {
-    return listOf(
-        ToolItem(
-            screen = Screen.Ping,
-            icon = Icons.Default.Radar,
-            description = "Test network connectivity and latency",
-            category = "Diagnostics",
-            gradientStart = Color(0xFF667eea),
-            gradientEnd = Color(0xFF764ba2)
-        ),
-        ToolItem(
-            screen = Screen.PortScan,
-            icon = Icons.Default.Security,
-            description = "Scan for open ports on network devices",
-            category = "Security",
-            gradientStart = Color(0xFFf093fb),
-            gradientEnd = Color(0xFFf5576c)
-        ),
-        ToolItem(
-            screen = Screen.DnsLookup,
-            icon = Icons.Default.Search,
-            description = "Lookup DNS records and domain information",
-            category = "Information",
-            gradientStart = Color(0xFF4facfe),
-            gradientEnd = Color(0xFF00f2fe)
-        ),
-        ToolItem(
-            screen = Screen.Traceroute,
-            icon = Icons.Default.NetworkCheck,
-            description = "Trace the network path to a destination",
-            category = "Diagnostics",
-            gradientStart = Color(0xFF43e97b),
-            gradientEnd = Color(0xFF38f9d7)
-        ),
-        ToolItem(
-            screen = Screen.Whois,
-            icon = Icons.Default.Badge,
-            description = "Get domain registration information",
-            category = "Information",
-            gradientStart = Color(0xFFfa709a),
-            gradientEnd = Color(0xFFfee140)
-        ),
-        ToolItem(
-            screen = Screen.SpeedTest,
-            icon = Icons.Default.Speed,
-            description = "Test your internet connection speed",
-            category = "Performance",
-            gradientStart = Color(0xFF30cfd0),
-            gradientEnd = Color(0xFF330867)
-        ),
-        ToolItem(
-            screen = Screen.IpInfo,
-            icon = Icons.Default.Public,
-            description = "Get detailed information about IP addresses",
-            category = "Information",
-            gradientStart = Color(0xFFa8edea),
-            gradientEnd = Color(0xFFfed6e3)
-        ),
-        ToolItem(
-            screen = Screen.WakeOnLan,
-            icon = Icons.Default.PowerSettingsNew,
-            description = "Wake up devices on your local network",
-            category = "Utilities",
-            gradientStart = Color(0xFF5ee7df),
-            gradientEnd = Color(0xFFb490ca)
-        ),
-        ToolItem(
-            screen = Screen.WifiAnalyzer,
-            icon = Icons.Default.Wifi,
-            description = "Analyze WiFi networks and signal strength",
-            category = "Wireless",
-            gradientStart = Color(0xFFd299c2),
-            gradientEnd = Color(0xFFfef9d7)
-        ),
-        ToolItem(
-            screen = Screen.NetworkCalculator,
-            icon = Icons.Default.Calculate,
-            description = "Calculate network subnets and IP ranges",
-            category = "Utilities",
-            gradientStart = Color(0xFFcd9cf2),
-            gradientEnd = Color(0xFFf6f3ff)
-        ),
-        ToolItem(
-            screen = Screen.PacketCapture,
-            icon = Icons.Default.DataUsage,
-            description = "Capture and analyze network packets",
-            category = "Advanced",
-            gradientStart = Color(0xFF09203f),
-            gradientEnd = Color(0xFF537895)
-        ),
-        ToolItem(
-            screen = Screen.TestHistory,
-            icon = Icons.Default.History,
-            description = "View your previous test results",
-            category = "History",
-            gradientStart = Color(0xFF434343),
-            gradientEnd = Color(0xFF000000)
+    return remember {
+        listOf(
+            ToolItem(
+                screen = Screen.Ping,
+                icon = Icons.Default.Radar,
+                description = "Test network connectivity and latency",
+                category = "Diagnostics",
+                gradientStart = Color(0xFF667eea),
+                gradientEnd = Color(0xFF764ba2)
+            ),
+            ToolItem(
+                screen = Screen.PortScan,
+                icon = Icons.Default.Security,
+                description = "Scan for open ports on network devices",
+                category = "Security",
+                gradientStart = Color(0xFFf093fb),
+                gradientEnd = Color(0xFFf5576c)
+            ),
+            ToolItem(
+                screen = Screen.DnsLookup,
+                icon = Icons.Default.Search,
+                description = "Lookup DNS records and domain information",
+                category = "Information",
+                gradientStart = Color(0xFF4facfe),
+                gradientEnd = Color(0xFF00f2fe)
+            ),
+            ToolItem(
+                screen = Screen.Traceroute,
+                icon = Icons.Default.NetworkCheck,
+                description = "Trace the network path to a destination",
+                category = "Diagnostics",
+                gradientStart = Color(0xFF43e97b),
+                gradientEnd = Color(0xFF38f9d7)
+            ),
+            ToolItem(
+                screen = Screen.Whois,
+                icon = Icons.Default.Badge,
+                description = "Get domain registration information",
+                category = "Information",
+                gradientStart = Color(0xFFfa709a),
+                gradientEnd = Color(0xFFfee140)
+            ),
+            ToolItem(
+                screen = Screen.SpeedTest,
+                icon = Icons.Default.Speed,
+                description = "Test your internet connection speed",
+                category = "Performance",
+                gradientStart = Color(0xFF30cfd0),
+                gradientEnd = Color(0xFF330867)
+            ),
+            ToolItem(
+                screen = Screen.IpInfo,
+                icon = Icons.Default.Public,
+                description = "Get detailed information about IP addresses",
+                category = "Information",
+                gradientStart = Color(0xFFa8edea),
+                gradientEnd = Color(0xFFfed6e3)
+            ),
+            ToolItem(
+                screen = Screen.WakeOnLan,
+                icon = Icons.Default.PowerSettingsNew,
+                description = "Wake up devices on your local network",
+                category = "Utilities",
+                gradientStart = Color(0xFF5ee7df),
+                gradientEnd = Color(0xFFb490ca)
+            ),
+            ToolItem(
+                screen = Screen.WifiAnalyzer,
+                icon = Icons.Default.Wifi,
+                description = "Analyze WiFi networks and signal strength",
+                category = "Wireless",
+                gradientStart = Color(0xFFd299c2),
+                gradientEnd = Color(0xFFfef9d7)
+            ),
+            ToolItem(
+                screen = Screen.NetworkCalculator,
+                icon = Icons.Default.Calculate,
+                description = "Calculate network subnets and IP ranges",
+                category = "Utilities",
+                gradientStart = Color(0xFFcd9cf2),
+                gradientEnd = Color(0xFFf6f3ff)
+            ),
+            ToolItem(
+                screen = Screen.PacketCapture,
+                icon = Icons.Default.DataUsage,
+                description = "Capture and analyze network packets",
+                category = "Advanced",
+                gradientStart = Color(0xFF09203f),
+                gradientEnd = Color(0xFF537895)
+            ),
+            ToolItem(
+                screen = Screen.TestHistory,
+                icon = Icons.Default.History,
+                description = "View your previous test results",
+                category = "History",
+                gradientStart = Color(0xFF434343),
+                gradientEnd = Color(0xFF000000)
+            )
         )
-    )
+    }
 }

@@ -21,12 +21,18 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.rudra.ispnetworktools.ui.DnsLookupScreen
+import com.rudra.ispnetworktools.ui.FtpTestScreen
+import com.rudra.ispnetworktools.ui.HttpHeaderScreen
+import com.rudra.ispnetworktools.ui.ImapTestScreen
 import com.rudra.ispnetworktools.ui.IpInfoScreen
 import com.rudra.ispnetworktools.ui.NetworkCalculatorScreen
 import com.rudra.ispnetworktools.ui.PacketCaptureScreen
 import com.rudra.ispnetworktools.ui.PingScreen
+import com.rudra.ispnetworktools.ui.Pop3TestScreen
 import com.rudra.ispnetworktools.ui.PortScanScreen
+import com.rudra.ispnetworktools.ui.SmtpTestScreen
 import com.rudra.ispnetworktools.ui.SpeedTestScreen
+import com.rudra.ispnetworktools.ui.SslCheckerScreen
 import com.rudra.ispnetworktools.ui.TestHistoryScreen
 import com.rudra.ispnetworktools.ui.TracerouteScreen
 import com.rudra.ispnetworktools.ui.WakeOnLanScreen
@@ -45,6 +51,12 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object IpInfo : Screen("ip_info", "IP Info", Icons.Default.Info)
     object WakeOnLan : Screen("wake_on_lan", "Wake on LAN", Icons.Default.Power)
     object WifiAnalyzer : Screen("wifi_analyzer", "Wi-Fi Analyzer", Icons.Default.Wifi)
+    object SslChecker : Screen("ssl_checker", "SSL Checker", Icons.Default.Security)
+    object HttpHeader : Screen("http_header", "HTTP Headers", Icons.Default.FindInPage)
+    object FtpTest : Screen("ftp_test", "FTP Test", Icons.Default.GraphicEq)
+    object SmtpTest : Screen("smtp_test", "SMTP Test", Icons.Default.GraphicEq)
+    object Pop3Test : Screen("pop3_test", "POP3 Test", Icons.Default.GraphicEq)
+    object ImapTest : Screen("imap_test", "IMAP Test", Icons.Default.GraphicEq)
     object NetworkCalculator : Screen("network_calculator", "Network Calculator", Icons.Default.Calculate)
     object PacketCapture : Screen("packet_capture", "Packet Capture", Icons.Default.Security)
     object TestHistory : Screen("test_history", "History", Icons.Default.History)
@@ -86,6 +98,24 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         }
         composable(Screen.WifiAnalyzer.route) {
             WifiAnalyzerScreen()
+        }
+        composable(Screen.SslChecker.route) {
+            SslCheckerScreen()
+        }
+        composable(Screen.HttpHeader.route) {
+            HttpHeaderScreen()
+        }
+        composable(Screen.FtpTest.route) {
+            FtpTestScreen()
+        }
+        composable(Screen.SmtpTest.route) {
+            SmtpTestScreen()
+        }
+        composable(Screen.Pop3Test.route) {
+            Pop3TestScreen()
+        }
+        composable(Screen.ImapTest.route) {
+            ImapTestScreen()
         }
         composable(Screen.NetworkCalculator.route) {
             NetworkCalculatorScreen()

@@ -8,32 +8,52 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.InetAddress
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import javax.inject.Inject
+
+
+sealed class DnsLookupUiState {
+    object Idle : DnsLookupUiState()
+    object Loading : DnsLookupUiState()
+    data class Success(val results: String) : DnsLookupUiState()
+    data class Error(val message: String) : DnsLookupUiState()
+}
+
+enum class DnsRecordType {
+    A, AAAA, CNAME, MX, TXT, NS, SOA
+}
 
 @HiltViewModel
 class DnsLookupViewModel @Inject constructor() : ViewModel() {
 
-    private val _lookupResult = MutableStateFlow<List<String>>(emptyList())
+    private val _lookupResult = MutableStateFlow<DnsLookupUiState>(DnsLookupUiState.Idle)
     val lookupResult = _lookupResult.asStateFlow()
 
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading = _isLoading.asStateFlow()
-
-    fun performDnsLookup(hostname: String) {
+    fun performDnsLookup(hostname: String, recordType: DnsRecordType) {
         viewModelScope.launch {
-            _isLoading.value = true
-            _lookupResult.value = emptyList()
+            _lookupResult.value = DnsLookupUiState.Loading
             withContext(Dispatchers.IO) {
                 try {
-                    val addresses = InetAddress.getAllByName(hostname)
-                    val addressList = addresses.map { it.hostAddress ?: "" }
-                    _lookupResult.value = addressList
+                    val command = listOf("dig", "+nocomments", "+noquestion", "+noauthority", "+noadditional", "+nostats", hostname, recordType.name)
+                    val process = ProcessBuilder(command).start()
+                    val reader = BufferedReader(InputStreamReader(process.inputStream))
+                    val output = StringBuilder()
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        output.append(line).append("\n")
+                    }
+                    process.waitFor()
+
+                    if(output.isBlank()) {
+                         _lookupResult.value = DnsLookupUiState.Error("No records found.")
+                    } else {
+                        _lookupResult.value = DnsLookupUiState.Success(output.toString())
+                    }
                 } catch (e: Exception) {
-                    _lookupResult.value = listOf("Error: ${e.message}")
+                    _lookupResult.value = DnsLookupUiState.Error("Error: ${e.message}")
                 }
             }
-            _isLoading.value = false
         }
     }
 }

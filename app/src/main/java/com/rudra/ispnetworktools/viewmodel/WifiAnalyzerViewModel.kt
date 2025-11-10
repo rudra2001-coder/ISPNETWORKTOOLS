@@ -8,39 +8,68 @@ import android.net.wifi.WifiManager
 import androidx.core.app.ActivityCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class WifiAnalyzerViewModel(private val context: Context) : ViewModel() {
+data class WifiScanResult(
+    val ssid: String,
+    val bssid: String,
+    val frequency: Int,
+    val signalStrength: Int,
+    val channel: Int
+)
 
-    private val _wifiInfo = MutableStateFlow<List<String>>(emptyList())
-    val wifiInfo: StateFlow<List<String>> = _wifiInfo
+sealed class WifiAnalyzerUiState {
+    object Idle : WifiAnalyzerUiState()
+    object Scanning : WifiAnalyzerUiState()
+    data class Success(val scanResults: List<WifiScanResult>) : WifiAnalyzerUiState()
+    data class Error(val message: String) : WifiAnalyzerUiState()
+}
+
+@HiltViewModel
+class WifiAnalyzerViewModel @Inject constructor(
+    @ApplicationContext private val context: Context
+) : ViewModel() {
+
+    private val _wifiState = MutableStateFlow<WifiAnalyzerUiState>(WifiAnalyzerUiState.Idle)
+    val wifiState: StateFlow<WifiAnalyzerUiState> = _wifiState
 
     private val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
 
-    init {
-        startWifiScan()
-    }
-
-    private fun startWifiScan() {
+    fun startWifiScan() {
         viewModelScope.launch {
-            if (ActivityCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.ACCESS_FINE_LOCATION
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                _wifiInfo.value = listOf("Location permission not granted")
+            _wifiState.value = WifiAnalyzerUiState.Scanning
+            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                _wifiState.value = WifiAnalyzerUiState.Error("Location permission not granted.")
                 return@launch
             }
-            val scanResults = wifiManager.scanResults
-            val wifiList = mutableListOf<String>()
-            for (result in scanResults) {
-                wifiList.add(
-                    "SSID: ${result.SSID}\nBSSID: ${result.BSSID}\nFrequency: ${result.frequency}MHz\nSignal Strength: ${result.level}dBm"
-                )
+            try {
+                val scanResults = wifiManager.scanResults
+                val wifiList = scanResults.map { result ->
+                    WifiScanResult(
+                        ssid = result.SSID,
+                        bssid = result.BSSID,
+                        frequency = result.frequency,
+                        signalStrength = result.level,
+                        channel = getChannel(result.frequency)
+                    )
+                }
+                _wifiState.value = WifiAnalyzerUiState.Success(wifiList)
+            } catch (e: Exception) {
+                _wifiState.value = WifiAnalyzerUiState.Error(e.message ?: "An unknown error occurred.")
             }
-            _wifiInfo.value = wifiList
+        }
+    }
+
+    private fun getChannel(frequency: Int): Int {
+        return when (frequency) {
+            in 2412..2484 -> (frequency - 2412) / 5 + 1
+            in 5170..5825 -> (frequency - 5170) / 5 + 34
+            else -> -1
         }
     }
 }

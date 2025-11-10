@@ -57,6 +57,8 @@ dependencies {
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.ui)
+    implementation(libs.androidx.compose.foundation.layout)
     ksp("androidx.room:room-compiler:2.6.1")
 
     // DataStore
@@ -80,7 +82,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.6.6")
     implementation("commons-net:commons-net:3.11.0")
     implementation("fr.bmartel:jspeedtest:1.32.1")
-    implementation("androidx.compose.material:material-icons-extended:<version>")
+    implementation(libs.accompanist.permissions)
+    implementation(libs.accompanist.systemuicontroller)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

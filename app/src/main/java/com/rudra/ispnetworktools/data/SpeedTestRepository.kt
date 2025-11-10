@@ -7,7 +7,10 @@ import fr.bmartel.speedtest.model.SpeedTestMode
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.math.BigDecimal
+import java.util.regex.Pattern
 import javax.inject.Inject
 
 class SpeedTestRepository @Inject constructor() {
@@ -22,16 +25,13 @@ class SpeedTestRepository @Inject constructor() {
                 when (report.speedTestMode) {
                     SpeedTestMode.DOWNLOAD -> {
                         trySend(SpeedTestResult.Download(speedInMbps))
-                        // Upload test starts after download is complete
                         speedTestSocket.startUpload("http://ipv4.ikoula.testdebit.info/10M.iso", 10000000)
                     }
                     SpeedTestMode.UPLOAD -> {
                         trySend(SpeedTestResult.Upload(speedInMbps))
-                        close() // Close the flow when both tests are complete
+                        // Ping test is now started from the viewmodel
                     }
-                    else -> {
-                        // Handle other modes if needed
-                    }
+                    else -> { /* Handle other modes if needed */ }
                 }
             }
 
@@ -50,9 +50,7 @@ class SpeedTestRepository @Inject constructor() {
                         SpeedTestMode.UPLOAD -> {
                             trySend(SpeedTestResult.UploadProgress(percent, progress))
                         }
-                        else -> {
-                            // Handle other modes if needed
-                        }
+                        else -> { /* Handle other modes if needed */ }
                     }
                 }
             }
@@ -66,7 +64,38 @@ class SpeedTestRepository @Inject constructor() {
             speedTestSocket.forceStopTask()
         }
     }
+
+    fun getPingStats(host: String): PingStats {
+        try {
+            val process = ProcessBuilder("ping", "-c", "10", "-i", "0.2", host).start()
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            val output = StringBuilder()
+            var line: String?
+            while (reader.readLine().also { line = it } != null) {
+                output.append(line).append("\n")
+            }
+            process.waitFor()
+            return parsePingOutput(output.toString())
+        } catch (e: Exception) {
+            return PingStats("N/A", "N/A", "N/A")
+        }
+    }
+
+    private fun parsePingOutput(output: String): PingStats {
+        val packetLossPattern = Pattern.compile("(\\d+)% packet loss")
+        val packetLossMatcher = packetLossPattern.matcher(output)
+        val packetLoss = if (packetLossMatcher.find()) packetLossMatcher.group(1) + "%" else "N/A"
+
+        val rttPattern = Pattern.compile("round-trip min/avg/max/stddev = ([\\d.]+)/([\\d.]+)/([\\d.]+)/([\\d.]+) ms")
+        val rttMatcher = rttPattern.matcher(output)
+        val jitter = if (rttMatcher.find()) rttMatcher.group(4) + " ms" else "N/A"
+        val avgLatency = if (rttMatcher.find()) rttMatcher.group(2) + " ms" else "N/A"
+
+        return PingStats(packetLoss, jitter, avgLatency)
+    }
 }
+
+data class PingStats(val packetLoss: String, val jitter: String, val avgLatency: String)
 
 sealed class SpeedTestResult {
     data class Download(val downloadSpeed: Double) : SpeedTestResult()

@@ -2,6 +2,7 @@ package com.rudra.ispnetworktools.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.rudra.ispnetworktools.data.PingStats
 import com.rudra.ispnetworktools.data.SpeedTestRepository
 import com.rudra.ispnetworktools.data.SpeedTestResult
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -38,7 +39,8 @@ class SpeedTestViewModel @Inject constructor(
                     }
                     is SpeedTestResult.Upload -> {
                         uploadSpeed = it.uploadSpeed
-                        _speedTestState.value = SpeedTestState.Success(downloadSpeed, uploadSpeed)
+                        val pingStats = speedTestRepository.getPingStats("google.com") // You might want to get the host from the speed test server
+                        _speedTestState.value = SpeedTestState.Success(downloadSpeed, uploadSpeed, pingStats)
                     }
                     is SpeedTestResult.Error -> {
                         _speedTestState.value = SpeedTestState.Error(it.message)
@@ -60,6 +62,6 @@ sealed class SpeedTestState {
         data class Download(val percent: Float, val downloadSpeed: Double) : SpeedTestProgress()
         data class Upload(val percent: Float, val uploadSpeed: Double) : SpeedTestProgress()
     }
-    data class Success(val downloadSpeed: Double, val uploadSpeed: Double) : SpeedTestState()
+    data class Success(val downloadSpeed: Double, val uploadSpeed: Double, val pingStats: PingStats) : SpeedTestState()
     data class Error(val message: String) : SpeedTestState()
 }

@@ -10,10 +10,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.NetworkCell
 import androidx.compose.material.icons.filled.Numbers
@@ -21,14 +23,12 @@ import androidx.compose.material.icons.filled.Schema
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Transform
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -38,20 +38,21 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import java.util.UUID
+import kotlin.math.ceil
+import kotlin.math.log2
 import kotlin.math.pow
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,291 +61,155 @@ fun NetworkCalculatorScreen() {
     var selectedTab by remember { mutableStateOf(CalculatorTab.SUBNET) }
     var ipAddress by remember { mutableStateOf("192.168.1.0") }
     var subnetMask by remember { mutableStateOf("255.255.255.0") }
-    var cidrNotation by remember { mutableIntStateOf(24) }
-    var calculationResult by remember { mutableStateOf<NetworkCalculation?>(null) }
+    val cidr by remember { derivedStateOf { subnetMaskToCidr(subnetMask) } }
 
-    LaunchedEffect(ipAddress, subnetMask, cidrNotation, selectedTab) {
-        calculationResult = calculateNetwork(ipAddress, subnetMask, cidrNotation)
+    val calculationResult by remember {
+        derivedStateOf {
+            calculateNetwork(ipAddress, subnetMask, cidr)
+        }
     }
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = "Network Calculator",
-                        style = MaterialTheme.typography.headlineSmall
-                    )
-                }
-            )
+            CenterAlignedTopAppBar(title = { Text("Network Calculator") })
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            // Tab selection
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
             TabRow(selectedTabIndex = selectedTab.ordinal) {
                 CalculatorTab.entries.forEach { tab ->
                     Tab(
                         selected = selectedTab == tab,
                         onClick = { selectedTab = tab },
                         text = { Text(tab.displayName) },
-                        icon = {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = tab.displayName
-                            )
-                        }
+                        icon = { Icon(tab.icon, contentDescription = tab.displayName) }
                     )
                 }
             }
 
-            when (selectedTab) {
-                CalculatorTab.SUBNET -> {
-                    SubnetCalculatorContent(
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                when (selectedTab) {
+                    CalculatorTab.SUBNET -> SubnetCalculatorContent(
                         ipAddress = ipAddress,
                         subnetMask = subnetMask,
-                        cidrNotation = cidrNotation,
                         onIpAddressChange = { ipAddress = it },
                         onSubnetMaskChange = { subnetMask = it },
-                        onCidrChange = { cidrNotation = it },
                         result = calculationResult
                     )
-                }
-
-                CalculatorTab.CIDR -> {
-                    CidrCalculatorContent(
-                        onCidrChange = { cidrNotation = it },
-                        result = calculationResult
-                    )
-                }
-
-                CalculatorTab.VLSM -> {
-                    VlsmCalculatorContent()
-                }
-
-                CalculatorTab.CONVERTER -> {
-                    ConverterContent()
+                    CalculatorTab.CIDR -> CidrCalculatorContent(result = calculationResult)
+                    CalculatorTab.CONVERTER -> ConverterContent()
+                    CalculatorTab.VLSM -> VlsmCalculatorContent()
                 }
             }
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
-@Composable
-private fun SubnetCalculatorContent(
-    ipAddress: String,
-    subnetMask: String,
-    cidrNotation: Int,
-    onIpAddressChange: (String) -> Unit,
-    onSubnetMaskChange: (String) -> Unit,
-    onCidrChange: (Int) -> Unit,
-    result: NetworkCalculation?
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Input section
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "Network Information",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // IP Address input
-                OutlinedTextField(
-                    value = ipAddress,
-                    onValueChange = { if (isValidIpAddress(it)) onIpAddressChange(it) },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("IP Address") },
-                    placeholder = { Text("192.168.1.0") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Dns, contentDescription = "IP Address")
-                    },
-                    singleLine = true,
-                    isError = !isValidIpAddress(ipAddress)
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Subnet Mask input
-                OutlinedTextField(
-                    value = subnetMask,
-                    onValueChange = { if (isValidSubnetMask(it)) onSubnetMaskChange(it) },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Subnet Mask") },
-                    placeholder = { Text("255.255.255.0") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Security, contentDescription = "Subnet Mask")
-                    },
-                    singleLine = true,
-                    isError = !isValidSubnetMask(subnetMask)
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // CIDR Slider
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("CIDR Notation: /$cidrNotation")
-                        Text("${getUsableHosts(cidrNotation)} usable hosts")
-                    }
-                    Slider(
-                        value = cidrNotation.toFloat(),
-                        onValueChange = { onCidrChange(it.toInt()) },
-                        valueRange = 8f..30f,
-                        steps = 22
-                    )
-                }
-            }
-        }
-
-        // Results section
-        result?.let {
-            NetworkResultsCard(result = it)
-        }
-
-        // Quick examples
-        QuickExamplesCard(
-            onExampleSelected = { example ->
-                onIpAddressChange(example.ip)
-                onSubnetMaskChange(example.subnet)
-                onCidrChange(example.cidr)
-            }
-        )
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-private fun CidrCalculatorContent(
-    onCidrChange: (Int) -> Unit,
+private fun SubnetCalculatorContent(
+    ipAddress: String,
+    subnetMask: String,
+    onIpAddressChange: (String) -> Unit,
+    onSubnetMaskChange: (String) -> Unit,
     result: NetworkCalculation?
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "CIDR Calculator",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+    val isIpValid by remember(ipAddress) { mutableStateOf(isValidIpAddress(ipAddress)) }
+    val isSubnetValid by remember(subnetMask) { mutableStateOf(isValidSubnetMask(subnetMask)) }
+    val cidr = subnetMaskToCidr(subnetMask)
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // CIDR notation input
-                var cidrInput by remember { mutableStateOf("24") }
-
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Network Information", style = MaterialTheme. typography.titleLarge)
                 OutlinedTextField(
-                    value = cidrInput,
-                    onValueChange = {
-                        cidrInput = it
-                        it.toIntOrNull()?.takeIf { num -> num in 0..32 }?.let { num ->
-                            onCidrChange(num)
-                        }
-                    },
+                    value = ipAddress,
+                    onValueChange = onIpAddressChange,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("CIDR Notation") },
-                    placeholder = { Text("24") },
-                    leadingIcon = {
-                        Icon(Icons.Default.Numbers, contentDescription = "CIDR")
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    label = { Text("IP Address") },
+                    leadingIcon = { Icon(Icons.Default.Dns, null) },
+                    isError = !isIpValid,
                     singleLine = true
                 )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // CIDR quick selection
-                Text(
-                    text = "Common CIDR Values",
-                    style = MaterialTheme.typography.labelMedium
+                OutlinedTextField(
+                    value = subnetMask,
+                    onValueChange = onSubnetMaskChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Subnet Mask") },
+                    leadingIcon = { Icon(Icons.Default.Security, null) },
+                    isError = !isSubnetValid,
+                    singleLine = true
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    listOf(8, 16, 24, 26, 28, 30, 32).forEach { cidr ->
-                        FilterChip(
-                            selected = cidrInput == cidr.toString(),
-                            onClick = {
-                                cidrInput = cidr.toString()
-                                onCidrChange(cidr)
-                            },
-                            label = { Text("/$cidr") }
-                        )
+                Column {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("CIDR: /$cidr")
+                        Text("${result?.usableHosts ?: 0} usable hosts")
                     }
+                    Slider(
+                        value = cidr.toFloat(),
+                        onValueChange = { onSubnetMaskChange(cidrToSubnetMask(it.toInt())) },
+                        valueRange = 1f..32f,
+                        steps = 30
+                    )
                 }
             }
         }
 
-        result?.let {
+        result?.let { NetworkResultsCard(result = it) }
+
+        QuickExamplesCard {
+            onIpAddressChange(it.ip)
+            onSubnetMaskChange(it.subnet)
+        }
+    }
+}
+
+@Composable
+private fun CidrCalculatorContent(result: NetworkCalculation?) {
+    result?.let {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             CidrResultsCard(result = it)
         }
     }
 }
 
 @Composable
-private fun VlsmCalculatorContent() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "VLSM Calculator",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+private fun ConverterContent() {
+    var decimalIp by remember { mutableStateOf("192.168.1.1") }
+
+    val conversionResult by remember(decimalIp) {
+        derivedStateOf {
+            if (isValidIpAddress(decimalIp)) {
+                val parts = decimalIp.split(".").map { it.toInt() }
+                val binary = parts.joinToString(".") { it.toString(2).padStart(8, '0') }
+                val hex = parts.joinToString(".") { it.toString(16).uppercase().padStart(2, '0') }
+                Triple(decimalIp, binary, hex)
+            } else {
+                null
+            }
+        }
+    }
+
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), Arrangement.spacedBy(12.dp)) {
+                Text("IP Address Converter", style = MaterialTheme.typography.titleLarge)
+                OutlinedTextField(
+                    value = decimalIp,
+                    onValueChange = { decimalIp = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Enter Decimal IP") },
+                    isError = conversionResult == null,
+                    singleLine = true
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Variable Length Subnet Masking allows efficient IP address allocation by creating subnets of different sizes.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(
-                    onClick = { /* TODO: Implement VLSM calculator */ },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Calculate, contentDescription = "Calculate")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Open VLSM Calculator")
+            }
+        }
+
+        conversionResult?.let {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), Arrangement.spacedBy(12.dp)) {
+                    Text("Conversion Results", style = MaterialTheme.typography.titleMedium)
+                    ConversionResultRow("Binary", it.second)
+                    ConversionResultRow("Hexadecimal", it.third)
                 }
             }
         }
@@ -352,190 +217,119 @@ private fun VlsmCalculatorContent() {
 }
 
 @Composable
-private fun ConverterContent() {
-    var binaryInput by remember { mutableStateOf("11000000.10101000.00000001.00000000") }
-    var decimalInput by remember { mutableStateOf("192.168.1.0") }
-    var hexInput by remember { mutableStateOf("C0.A8.01.00") }
+private fun VlsmCalculatorContent() {
+    var majorNetwork by remember { mutableStateOf("192.168.0.0/24") }
+    var subnetRequests by remember { mutableStateOf(listOf(VlsmSubnetRequest(UUID.randomUUID().toString(), "Sales", 50))) }
+    var vlsmResult by remember { mutableStateOf<List<NetworkCalculation>?>(null) }
+    var vlsmError by remember { mutableStateOf<String?>(null) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Card(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "IP Address Converter",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Decimal (standard) IP
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), Arrangement.spacedBy(12.dp)) {
+                Text("VLSM Calculator", style = MaterialTheme.typography.titleLarge)
                 OutlinedTextField(
-                    value = decimalInput,
-                    onValueChange = { decimalInput = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Decimal IP") },
-                    placeholder = { Text("192.168.1.0") },
-                    singleLine = true
+                    value = majorNetwork,
+                    onValueChange = { majorNetwork = it },
+                    label = { Text("Major Network (e.g., 192.168.0.0/24)") },
+                    modifier = Modifier.fillMaxWidth()
                 )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Binary IP
-                OutlinedTextField(
-                    value = binaryInput,
-                    onValueChange = { binaryInput = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Binary IP") },
-                    placeholder = { Text("11000000.10101000.00000001.00000000") },
-                    textStyle = TextStyle(fontFamily = FontFamily.Monospace),
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Hexadecimal IP
-                OutlinedTextField(
-                    value = hexInput,
-                    onValueChange = { hexInput = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Hexadecimal IP") },
-                    placeholder = { Text("C0.A8.01.00") },
-                    textStyle = TextStyle(fontFamily = FontFamily.Monospace),
-                    singleLine = true
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = { /* Convert decimal to others */ },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Convert")
-                    }
-                    Button(
-                        onClick = {
-                            decimalInput = ""
-                            binaryInput = ""
-                            hexInput = ""
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
+                subnetRequests.forEachIndexed { index, req ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = req.name,
+                            onValueChange = { newName ->
+                                val newList = subnetRequests.toMutableList()
+                                newList[index] = req.copy(name = newName)
+                                subnetRequests = newList
+                            },
+                            label = { Text("Subnet Name") },
+                            modifier = Modifier.weight(1f)
                         )
-                    ) {
-                        Text("Clear")
+                        OutlinedTextField(
+                            value = req.hosts.toString(),
+                            onValueChange = { newHosts ->
+                                val newList = subnetRequests.toMutableList()
+                                newList[index] = req.copy(hosts = newHosts.toIntOrNull() ?: 0)
+                                subnetRequests = newList
+                            },
+                            label = { Text("Hosts") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(0.5f).padding(start = 8.dp)
+                        )
+                        IconButton(onClick = {
+                            subnetRequests = subnetRequests.filter { it.id != req.id }
+                        }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete Subnet")
+                        }
                     }
+                }
+                Button(onClick = { subnetRequests = subnetRequests + VlsmSubnetRequest(UUID.randomUUID().toString(), "", 0) }) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Subnet")
+                    Text("Add Subnet")
                 }
             }
         }
+
+        Button(onClick = { 
+            vlsmError = null
+            val result = calculateVlsm(majorNetwork, subnetRequests)
+            if (result == null) {
+                vlsmError = "Invalid Major Network. Please use CIDR notation (e.g., 192.168.0.0/24)."
+            }
+            vlsmResult = result
+        }) {
+            Text("Calculate VLSM")
+        }
+
+        vlsmError?.let {
+            Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+        }
+
+        vlsmResult?.let {
+            Text("VLSM Results", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 16.dp))
+            it.forEach { result ->
+                NetworkResultsCard(result = result)
+            }
+        }
     }
+}
+
+@Composable
+private fun ConversionResultRow(label: String, value: String) {
+    Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+    Text(value, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyLarge)
+    Divider()
 }
 
 @Composable
 private fun NetworkResultsCard(result: NetworkCalculation) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = "Calculation Results",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Network information in a grid
-            ResultGridItem(label = "Network Address", value = result.networkAddress)
-            ResultGridItem(label = "Broadcast Address", value = result.broadcastAddress)
-            ResultGridItem(label = "First Usable IP", value = result.firstUsableIp)
-            ResultGridItem(label = "Last Usable IP", value = result.lastUsableIp)
-            ResultGridItem(label = "Subnet Mask", value = result.subnetMask)
-            ResultGridItem(label = "Wildcard Mask", value = result.wildcardMask)
-            ResultGridItem(label = "CIDR Notation", value = "/${result.cidr}")
-            ResultGridItem(label = "Total Hosts", value = result.totalHosts.toString())
-            ResultGridItem(label = "Usable Hosts", value = result.usableHosts.toString())
-            ResultGridItem(label = "IP Class", value = result.ipClass)
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // IP range
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp)
-                ) {
-                    Text(
-                        text = "IP Range",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "${result.firstUsableIp} - ${result.lastUsableIp}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            val title = result.name ?: result.networkAddress
+            Text(title, style = MaterialTheme.typography.titleLarge)
+            if (result.name != null) {
+                Text(result.networkAddress, style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
             }
+            Spacer(Modifier.height(16.dp))
+            ResultGridItem("Broadcast Address", result.broadcastAddress)
+            ResultGridItem("IP Range", "${result.firstUsableIp} - ${result.lastUsableIp}")
+            ResultGridItem("Usable Hosts", result.usableHosts.toString())
+            ResultGridItem("Subnet Mask", result.subnetMask)
         }
     }
 }
 
 @Composable
 private fun CidrResultsCard(result: NetworkCalculation) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = "CIDR Results - /${result.cidr}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            ResultGridItem(label = "Subnet Mask", value = result.subnetMask)
-            ResultGridItem(label = "Total IPs", value = result.totalHosts.toString())
-            ResultGridItem(label = "Usable IPs", value = result.usableHosts.toString())
-            ResultGridItem(label = "Network Bits", value = result.cidr.toString())
-            ResultGridItem(label = "Host Bits", value = (32 - result.cidr).toString())
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Binary representation
-            Text(
-                text = "Binary: ${result.subnetMask.split(".").joinToString(".") { it.toInt().toString(2).padStart(8, '0') }}",
-                style = MaterialTheme.typography.bodySmall,
-                fontFamily = FontFamily.Monospace
-            )
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text("CIDR /${result.cidr} Results", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(16.dp))
+            ResultGridItem("Subnet Mask", result.subnetMask)
+            ResultGridItem("Total IPs", result.totalHosts.toString())
+            ResultGridItem("Usable IPs", result.usableHosts.toString())
+            ResultGridItem("Network Bits", result.cidr.toString())
+            ResultGridItem("Host Bits", (32 - result.cidr).toString())
         }
     }
 }
@@ -544,35 +338,17 @@ private fun CidrResultsCard(result: NetworkCalculation) {
 @Composable
 private fun QuickExamplesCard(onExampleSelected: (NetworkExample) -> Unit) {
     val examples = listOf(
-        NetworkExample("Class C Default", "192.168.1.0", "255.255.255.0", 24),
-        NetworkExample("Class B Default", "172.16.0.0", "255.255.0.0", 16),
-        NetworkExample("Class A Default", "10.0.0.0", "255.0.0.0", 8),
-        NetworkExample("Small Subnet", "192.168.1.0", "255.255.255.252", 30),
-        NetworkExample("Medium Subnet", "192.168.1.0", "255.255.255.128", 25)
+        NetworkExample("Class C", "192.168.1.0", "255.255.255.0"),
+        NetworkExample("Class B", "172.16.0.0", "255.255.0.0"),
+        NetworkExample("Class A", "10.0.0.0", "255.0.0.0"),
+        NetworkExample("Small Subnet", "192.168.10.0", "255.255.255.252"),
     )
 
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = "Quick Examples",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                examples.forEach { example ->
-                    SuggestionChip(
-                        onClick = { onExampleSelected(example) },
-                        label = { Text(example.name) }
-                    )
-                }
+    Column {
+        Text("Quick Examples", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            examples.forEach { example ->
+                SuggestionChip(onClick = { onExampleSelected(example) }, label = { Text(example.name) })
             }
         }
     }
@@ -580,38 +356,20 @@ private fun QuickExamplesCard(onExampleSelected: (NetworkExample) -> Unit) {
 
 @Composable
 fun ResultGridItem(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1f)
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            fontFamily = FontFamily.Monospace,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+    Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        Text(value, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.End)
     }
-    Divider(modifier = Modifier.padding(vertical = 8.dp))
+    Divider()
 }
 
-data class NetworkExample(
-    val name: String,
-    val ip: String,
-    val subnet: String,
-    val cidr: Int
-)
+data class NetworkExample(val name: String, val ip: String, val subnet: String)
 
 enum class CalculatorTab(val displayName: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     SUBNET("Subnet", Icons.Default.NetworkCell),
     CIDR("CIDR", Icons.Default.Numbers),
-    VLSM("VLSM", Icons.Default.Schema),
-    CONVERTER("Converter", Icons.Default.Transform)
+    CONVERTER("Converter", Icons.Default.Transform),
+    VLSM("VLSM", Icons.Default.Schema)
 }
 
 data class NetworkCalculation(
@@ -624,85 +382,107 @@ data class NetworkCalculation(
     val cidr: Int,
     val totalHosts: Long,
     val usableHosts: Long,
-    val ipClass: String
+    val ipClass: String,
+    val name: String? = null
 )
 
-fun isValidIpAddress(ip: String): Boolean {
+data class VlsmSubnetRequest(
+    val id: String,
+    val name: String,
+    val hosts: Int
+)
+
+private fun isValidIpAddress(ip: String): Boolean {
     val ipRegex = Regex("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$")
     return ipRegex.matches(ip)
 }
 
-fun isValidSubnetMask(mask: String): Boolean {
+private fun isValidSubnetMask(mask: String): Boolean {
     if (!isValidIpAddress(mask)) return false
-    val parts = mask.split(".").map { it.toInt() }
-    val binaryString = parts.joinToString("") { it.toString(2).padStart(8, '0') }
+    val binaryString = mask.split(".").map { it.toInt().toString(2).padStart(8, '0') }.joinToString("")
     return "01" !in binaryString
 }
 
-fun getUsableHosts(cidr: Int): Long {
-    return if (cidr in 0..30) {
-        2.0.pow(32 - cidr).toLong() - 2
-    } else {
-        0
-    }
+private fun subnetMaskToCidr(mask: String): Int {
+    if (!isValidSubnetMask(mask)) return 0
+    return mask.split(".").sumOf { Integer.parseInt(it).toString(2).count { char -> char == '1' } }
 }
 
-fun calculateNetwork(ipAddress: String, subnetMask: String, cidrNotation: Int): NetworkCalculation? {
-    if (!isValidIpAddress(ipAddress) || !isValidSubnetMask(subnetMask)) {
-        return null
-    }
+private fun cidrToSubnetMask(cidr: Int): String {
+    if (cidr !in 0..32) return "0.0.0.0"
+    val maskValue = if (cidr == 0) 0L else (-1L shl (32 - cidr))
+    return longToIp(maskValue and 0xFFFFFFFFL)
+}
 
-    val ipParts = ipAddress.split(".").map { it.toLong() }
-    val maskParts = subnetMask.split(".").map { it.toLong() }
+private fun calculateNetwork(ipAddress: String, subnetMask: String, cidr: Int, name: String? = null): NetworkCalculation? {
+    if (!isValidIpAddress(ipAddress) || !isValidSubnetMask(subnetMask)) return null
 
-    val networkAddressParts = ipParts.zip(maskParts).map { (ip, mask) -> ip and mask }
+    val ip = ipAddress.split(".").map { it.toLong() }
+    val mask = subnetMask.split(".").map { it.toLong() }
+
+    val networkAddressParts = ip.zip(mask) { ipPart, maskPart -> ipPart and maskPart }
+    val wildcardParts = mask.map { 255 - it }
+    val broadcastAddressParts = networkAddressParts.zip(wildcardParts) { netPart, wildPart -> netPart or wildPart }
+
     val networkAddress = networkAddressParts.joinToString(".")
-
-    val wildcardMaskParts = maskParts.map { 255 - it }
-    val wildcardMask = wildcardMaskParts.joinToString(".")
-
-    val broadcastAddressParts = networkAddressParts.zip(wildcardMaskParts).map { (net, wild) -> net or wild }
     val broadcastAddress = broadcastAddressParts.joinToString(".")
+    val firstIp = networkAddressParts.toMutableList().apply { if (cidr < 31) this[3]++ }.joinToString(".")
+    val lastIp = broadcastAddressParts.toMutableList().apply { if (cidr < 31) this[3]-- }.joinToString(".")
 
-    val firstUsableIpParts = networkAddressParts.toMutableList()
-    if (cidrNotation < 31) {
-        firstUsableIpParts[3]++
-    }
-    val firstUsableIp = firstUsableIpParts.joinToString(".")
+    val totalHosts = 2.0.pow(32 - cidr).toLong()
+    val usableHosts = if (cidr < 31) totalHosts - 2 else 0
 
-    val lastUsableIpParts = broadcastAddressParts.toMutableList()
-    if (cidrNotation < 31) {
-        lastUsableIpParts[3]--
-    }
-    val lastUsableIp = lastUsableIpParts.joinToString(".")
-
-    val totalHosts = 2.0.pow(32 - cidrNotation).toLong()
-    val usableHosts = if (totalHosts >= 2) totalHosts - 2 else 0
-
-    val ipClass = when {
-        ipParts[0] in 1..126 -> "A"
-        ipParts[0] in 128..191 -> "B"
-        ipParts[0] in 192..223 -> "C"
-        ipParts[0] in 224..239 -> "D (Multicast)"
+    val ipClass = when (ip.first().toInt()) {
+        in 1..126 -> "A"
+        in 128..191 -> "B"
+        in 192..223 -> "C"
+        in 224..239 -> "D (Multicast)"
         else -> "E (Reserved)"
     }
 
     return NetworkCalculation(
-        networkAddress = networkAddress,
-        broadcastAddress = broadcastAddress,
-        firstUsableIp = firstUsableIp,
-        lastUsableIp = lastUsableIp,
-        subnetMask = subnetMask,
-        wildcardMask = wildcardMask,
-        cidr = cidrNotation,
-        totalHosts = totalHosts,
-        usableHosts = usableHosts,
-        ipClass = ipClass
+        networkAddress, broadcastAddress, firstIp, lastIp, subnetMask,
+        wildcardParts.joinToString("."), cidr, totalHosts, usableHosts, ipClass, name
     )
 }
+
+private fun calculateVlsm(majorNetwork: String, requests: List<VlsmSubnetRequest>): List<NetworkCalculation>? {
+    val parts = majorNetwork.split('/')
+    if (parts.size != 2) return null
+    val majorIp = parts[0]
+    val majorCidr = parts[1].toIntOrNull() ?: return null
+    if (!isValidIpAddress(majorIp)) return null
+
+    var currentIp = ipToLong(majorIp)
+    val sortedRequests = requests.sortedByDescending { it.hosts }
+    val results = mutableListOf<NetworkCalculation>()
+
+    for (request in sortedRequests) {
+        val requiredBits = ceil(log2(request.hosts.toDouble() + 2)).toInt()
+        val subnetCidr = 32 - requiredBits
+        val subnetMask = cidrToSubnetMask(subnetCidr)
+        val networkIp = longToIp(currentIp)
+
+        calculateNetwork(networkIp, subnetMask, subnetCidr, request.name)?.let {
+            results.add(it)
+        }
+
+        currentIp += 2.0.pow(requiredBits).toLong()
+    }
+    return results
+}
+
+private fun ipToLong(ip: String): Long {
+    return ip.split('.').map { it.toLong() }.reduce { acc, part -> (acc shl 8) + part }
+}
+
+private fun longToIp(ip: Long): String {
+    return (0..3).map { (ip shr (24 - it * 8)) and 0xFF }.joinToString(".")
+}
+
 
 @Preview(showBackground = true)
 @Composable
 fun NetworkCalculatorScreenPreview() {
-    NetworkCalculatorScreen()
+    MaterialTheme { NetworkCalculatorScreen() }
 }
