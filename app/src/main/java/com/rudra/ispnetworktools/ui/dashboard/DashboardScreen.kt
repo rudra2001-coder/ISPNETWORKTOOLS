@@ -129,7 +129,7 @@ private fun DashboardContent(
                     IconButton(onClick = { navController.navigate(Screen.TestHistory.route) }) {
                         Icon(Icons.Default.History, contentDescription = "History")
                     }
-                    IconButton(onClick = { /* Open settings */ }) {
+                    IconButton(onClick = { navController.navigate(Screen.Settings.route) }) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
                 }

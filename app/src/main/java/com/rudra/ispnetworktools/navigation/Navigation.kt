@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Power
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.runtime.Composable
@@ -39,6 +40,7 @@ import com.rudra.ispnetworktools.ui.WakeOnLanScreen
 import com.rudra.ispnetworktools.ui.WhoisScreen
 import com.rudra.ispnetworktools.ui.WifiAnalyzerScreen
 import com.rudra.ispnetworktools.ui.dashboard.DashboardScreen
+import com.rudra.ispnetworktools.ui.screens.settings.SettingsScreen
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
     object Dashboard : Screen("dashboard", "Dashboard", Icons.Default.Dashboard)
@@ -60,6 +62,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     object NetworkCalculator : Screen("network_calculator", "Network Calculator", Icons.Default.Calculate)
     object PacketCapture : Screen("packet_capture", "Packet Capture", Icons.Default.Security)
     object TestHistory : Screen("test_history", "History", Icons.Default.History)
+    object Settings : Screen("settings", "Settings", Icons.Default.Settings)
 }
 
 @Composable
@@ -125,6 +128,9 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         }
         composable(Screen.TestHistory.route) {
             TestHistoryScreen()
+        }
+        composable(Screen.Settings.route) {
+            SettingsScreen()
         }
     }
 }
