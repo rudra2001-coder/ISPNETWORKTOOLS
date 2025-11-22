@@ -59,6 +59,7 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.ui)
     implementation(libs.androidx.compose.foundation.layout)
+    implementation(libs.androidx.foundation)
     ksp("androidx.room:room-compiler:2.6.1")
 
     // DataStore
